@@ -40,9 +40,27 @@ model Exam {
   createdBy       User             @relation("ExamCreator", fields: [createdById], references: [id])
   assignments     ExamAssignment[]
   sessions        ExamSession[]
+  questions       ExamQuestion[]
 
   @@index([createdById])
   @@index([status])
+}
+
+model ExamQuestion {
+  id                 String       @id @default(uuid()) @db.Uuid
+  examId             String       @db.Uuid
+  prompt             String
+  type               QuestionType @default(SHORT_TEXT)
+  options            Json?
+  correctOptionIndex Int?
+  points             Int          @default(1)
+  order              Int
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  exam               Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, order])
+  @@index([examId])
 }
 
 model ExamAssignment {
@@ -204,6 +222,11 @@ enum ExamStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+}
+
+enum QuestionType {
+  SHORT_TEXT
+  MULTIPLE_CHOICE
 }
 
 enum AssignmentStatus {
