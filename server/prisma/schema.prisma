@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String
+  email            String           @unique
+  passwordHash     String
+  role             UserRole         @default(STUDENT)
+  matricNumber     String?
+  department       String?
+  isActive         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  resolvedAlerts   Alert[]          @relation("ResolvedAlerts")
+  createdExams     Exam[]           @relation("ExamCreator")
+  assignments      ExamAssignment[] @relation("StudentAssignments")
+  sessions         ExamSession[]    @relation("StudentSessions")
+  generatedReports Report[]         @relation("GeneratedReports")
+}
+
+model Exam {
+  id              String           @id @default(uuid()) @db.Uuid
+  title           String
+  description     String?
+  durationMinutes Int
+  startTime       DateTime
+  endTime         DateTime
+  createdById     String           @db.Uuid
+  status          ExamStatus       @default(DRAFT)
+  settings        Json             @default("{}")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  createdBy       User             @relation("ExamCreator", fields: [createdById], references: [id])
+  assignments     ExamAssignment[]
+  sessions        ExamSession[]
+
+  @@index([createdById])
+  @@index([status])
+}
+
+model ExamAssignment {
+  id        String           @id @default(uuid()) @db.Uuid
+  examId    String           @db.Uuid
+  studentId String           @db.Uuid
+  status    AssignmentStatus @default(ASSIGNED)
+  createdAt DateTime         @default(now())
+  exam      Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student   User             @relation("StudentAssignments", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@index([studentId])
+}
+
+model ExamSession {
+  id                  String            @id @default(uuid()) @db.Uuid
+  examId              String            @db.Uuid
+  studentId           String            @db.Uuid
+  startedAt           DateTime          @default(now())
+  endedAt             DateTime?
+  status              SessionStatus     @default(INITIALIZING)
+  consentAccepted     Boolean           @default(false)
+  permissions         Json              @default("{}")
+  deviceInfo          Json              @default("{}")
+  ipAddress           String?
+  userAgent           String?
+  riskScore           Float             @default(0)
+  riskLevel           RiskLevel         @default(LOW)
+  tabSwitchCount      Int               @default(0)
+  faceMissingCount    Int               @default(0)
+  multipleFaceCount   Int               @default(0)
+  copyPasteCount      Int               @default(0)
+  fullscreenExitCount Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  alerts              Alert[]
+  evidence            Evidence[]
+  exam                Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student             User              @relation("StudentSessions", fields: [studentId], references: [id], onDelete: Cascade)
+  events              MonitoringEvent[]
+  report              Report?
+
+  @@index([examId])
+  @@index([studentId])
+  @@index([status])
+  @@index([riskLevel])
+}
+
+model MonitoringEvent {
+  id        String              @id @default(uuid()) @db.Uuid
+  sessionId String              @db.Uuid
+  eventType MonitoringEventType
+  severity  Severity            @default(INFO)
+  message   String
+  metadata  Json?
+  timestamp DateTime            @default(now())
+  createdAt DateTime            @default(now())
+  alerts    Alert[]             @relation("EventAlerts")
+  evidence  Evidence[]          @relation("EventEvidence")
+  session   ExamSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([timestamp])
+}
+
+model Alert {
+  id             String           @id @default(uuid()) @db.Uuid
+  sessionId      String           @db.Uuid
+  eventId        String?          @db.Uuid
+  title          String
+  description    String
+  severity       Severity
+  status         AlertStatus      @default(OPEN)
+  resolvedById   String?          @db.Uuid
+  resolutionNote String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  event          MonitoringEvent? @relation("EventAlerts", fields: [eventId], references: [id])
+  resolvedBy     User?            @relation("ResolvedAlerts", fields: [resolvedById], references: [id])
+  session        ExamSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([severity])
+  @@index([status])
+}
+
+model Evidence {
+  id        String           @id @default(uuid()) @db.Uuid
+  sessionId String           @db.Uuid
+  eventId   String?          @db.Uuid
+  type      EvidenceType
+  fileUrl   String
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  event     MonitoringEvent? @relation("EventEvidence", fields: [eventId], references: [id])
+  session   ExamSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([type])
+}
+
+model Report {
+  id                 String         @id @default(uuid()) @db.Uuid
+  sessionId          String         @unique @db.Uuid
+  generatedById      String?        @db.Uuid
+  summary            String
+  riskScore          Float
+  riskLevel          RiskLevel
+  totalEvents        Int
+  highSeverityEvents Int
+  recommendation     Recommendation
+  reportJson         Json
+  pdfUrl             String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  generatedBy        User?          @relation("GeneratedReports", fields: [generatedById], references: [id])
+  session            ExamSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([riskLevel])
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuthCode {
+  id         String          @id @default(uuid()) @db.Uuid
+  email      String
+  codeHash   String
+  purpose    AuthCodePurpose
+  payload    Json?
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@index([email])
+  @@index([purpose])
+  @@index([expiresAt])
+}
+
+enum UserRole {
+  STUDENT
+  EXAMINER
+  ADMIN
+}
+
+enum ExamStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  STARTED
+  SUBMITTED
+  FLAGGED
+  CANCELLED
+}
+
+enum SessionStatus {
+  INITIALIZING
+  ACTIVE
+  SUBMITTED
+  TERMINATED
+  FLAGGED
+}
+
+enum MonitoringEventType {
+  SESSION_STARTED
+  SESSION_ENDED
+  CONSENT_ACCEPTED
+  PERMISSION_GRANTED
+  PERMISSION_DENIED
+  FACE_PRESENT
+  FACE_MISSING
+  MULTIPLE_FACES
+  TAB_SWITCH
+  WINDOW_BLUR
+  WINDOW_FOCUS
+  FULLSCREEN_EXIT
+  FULLSCREEN_ENTER
+  COPY_ATTEMPT
+  PASTE_ATTEMPT
+  RIGHT_CLICK
+  SCREENSHOT_CAPTURED
+  SUSPICIOUS_BEHAVIOR
+  AI_ANALYSIS
+  SYSTEM_WARNING
+}
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum EvidenceType {
+  SCREENSHOT
+  WEBCAM_FRAME
+  REPORT_FILE
+  OTHER
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Recommendation {
+  CLEAR
+  REVIEW_REQUIRED
+  LIKELY_VIOLATION
+}
+
+enum AuthCodePurpose {
+  ACCOUNT_CREATION
+  PASSWORD_RESET
+}

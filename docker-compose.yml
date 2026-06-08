@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: examsentinel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: examsentinel
+      POSTGRES_PASSWORD: examsentinel
+      POSTGRES_DB: examsentinel
+    ports:
+      - "5432:5432"
+    volumes:
+      - examsentinel-postgres:/var/lib/postgresql/data
+
+volumes:
+  examsentinel-postgres:

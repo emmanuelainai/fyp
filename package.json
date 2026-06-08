@@ -1,0 +1,16 @@
+{
+  "name": "examsentinel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ExamSentinel online exam monitoring platform",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w server && npm run build -w client",
+    "test": "npm run test -w server"
+  }
+}
